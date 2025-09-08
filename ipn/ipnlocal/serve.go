@@ -887,12 +887,15 @@ func (b *LocalBackend) serveWebHandler(w http.ResponseWriter, r *http.Request) {
 		b.serveFileOrDirectory(w, r, v, mountPoint)
 		return
 	}
+	fmt.Println("Kevin: I was here in serveWebHandler")
 	if v := h.Proxy(); v != "" {
+		fmt.Println("Kevin: I was here in serveWebHandler and about to load proxy handler")
 		p, ok := b.serveProxyHandlers.Load(v)
 		if !ok {
 			http.Error(w, "unknown proxy destination", http.StatusInternalServerError)
 			return
 		}
+		fmt.Println("Kevin: Service handler loaded, about to serve")
 		h := p.(http.Handler)
 		// Trim the mount point from the URL path before proxying. (#6571)
 		if r.URL.Path != "/" {

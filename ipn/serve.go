@@ -684,11 +684,11 @@ func ExpandProxyTargetValue(target string, supportedSchemes []string, defaultSch
 	}
 
 	// validate the host.
-	switch u.Hostname() {
-	case "localhost", "127.0.0.1":
-	default:
-		return "", errors.New("only localhost or 127.0.0.1 proxies are currently supported")
-	}
+	// switch u.Hostname() {
+	// case "localhost", "127.0.0.1":
+	// default:
+	// 	return "", errors.New("only localhost or 127.0.0.1 proxies are currently supported")
+	// }
 
 	// validate the port
 	port, err := strconv.ParseUint(u.Port(), 10, 16)

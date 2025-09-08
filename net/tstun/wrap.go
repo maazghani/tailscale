@@ -1151,6 +1151,7 @@ func (t *Wrapper) filterPacketInboundFromWireGuard(p *packet.Parsed, captHook pa
 	if filt == nil {
 		return filter.Drop, gro
 	}
+	fmt.Println("Kevin: I was here at filterPacketInboundFromWireGuard")
 	outcome := filt.RunIn(p, t.filterFlags)
 
 	// Let peerapi through the filter; its ACLs are handled at L7,
