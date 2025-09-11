@@ -168,9 +168,19 @@ func (cc *mockControl) populateKeys() (newKeys bool) {
 	return newKeys
 }
 
+type sendOptions struct {
+	err           error
+	url           string
+	loginFinished bool
+}
+
 // send publishes a controlclient.Status notification upstream.
 // (In our tests here, upstream is the ipnlocal.Local instance.)
-func (cc *mockControl) send(err error, url string, loginFinished bool, nm *netmap.NetworkMap) {
+func (cc *mockControl) send(options sendOptions, nm *netmap.NetworkMap) {
+	err := options.err
+	url := options.url
+	loginFinished := options.loginFinished
+
 	if loginFinished {
 		cc.mu.Lock()
 		cc.authBlocked = false
@@ -197,7 +207,7 @@ func (cc *mockControl) authenticated(nm *netmap.NetworkMap) {
 		cc.persist.UserProfile = *selfUser.AsStruct()
 	}
 	cc.persist.NodeID = nm.SelfNode.StableID()
-	cc.send(nil, "", true, nm)
+	cc.send(sendOptions{loginFinished: true}, nm)
 }
 
 func (cc *mockControl) sendAuthURL(nm *netmap.NetworkMap) {
@@ -455,7 +465,7 @@ func TestStateMachine(t *testing.T) {
 		},
 	})
 	url1 := "https://localhost:1/1"
-	cc.send(nil, url1, false, nil)
+	cc.send(sendOptions{url: url1}, nil)
 	{
 		cc.assertCalls()
 
@@ -508,7 +518,7 @@ func TestStateMachine(t *testing.T) {
 	t.Logf("\n\nLogin2 (url response)")
 	notifies.expect(1)
 	url2 := "https://localhost:1/2"
-	cc.send(nil, url2, false, nil)
+	cc.send(sendOptions{url: url2}, nil)
 	{
 		cc.assertCalls()
 
@@ -528,7 +538,7 @@ func TestStateMachine(t *testing.T) {
 	notifies.expect(3)
 	cc.persist.UserProfile.LoginName = "user1"
 	cc.persist.NodeID = "node1"
-	cc.send(nil, "", true, &netmap.NetworkMap{})
+	cc.send(sendOptions{loginFinished: true}, &netmap.NetworkMap{})
 	{
 		nn := notifies.drain(3)
 		// Arguably it makes sense to unpause now, since the machine
@@ -557,7 +567,7 @@ func TestStateMachine(t *testing.T) {
 	// but the current code is brittle.
 	// (ie. I suspect it would be better to change false->true in send()
 	// below, and do the same in the real controlclient.)
-	cc.send(nil, "", false, &netmap.NetworkMap{
+	cc.send(sendOptions{}, &netmap.NetworkMap{
 		SelfNode: (&tailcfg.Node{MachineAuthorized: true}).View(),
 	})
 	{
@@ -720,7 +730,7 @@ func TestStateMachine(t *testing.T) {
 	// an interactive login URL to visit.
 	notifies.expect(2)
 	url3 := "https://localhost:1/3"
-	cc.send(nil, url3, false, nil)
+	cc.send(sendOptions{url: url3}, nil)
 	{
 		nn := notifies.drain(2)
 		cc.assertCalls("Login")
@@ -731,7 +741,7 @@ func TestStateMachine(t *testing.T) {
 	notifies.expect(3)
 	cc.persist.UserProfile.LoginName = "user2"
 	cc.persist.NodeID = "node2"
-	cc.send(nil, "", true, &netmap.NetworkMap{
+	cc.send(sendOptions{loginFinished: true}, &netmap.NetworkMap{
 		SelfNode: (&tailcfg.Node{MachineAuthorized: true}).View(),
 	})
 	t.Logf("\n\nLoginFinished3")
@@ -801,7 +811,7 @@ func TestStateMachine(t *testing.T) {
 	//  the control server at all when stopped).
 	t.Logf("\n\nStart4 -> netmap")
 	notifies.expect(0)
-	cc.send(nil, "", true, &netmap.NetworkMap{
+	cc.send(sendOptions{loginFinished: true}, &netmap.NetworkMap{
 		SelfNode: (&tailcfg.Node{MachineAuthorized: true}).View(),
 	})
 	{
@@ -848,7 +858,7 @@ func TestStateMachine(t *testing.T) {
 	notifies.expect(1)
 	b.StartLoginInteractive(context.Background())
 	url4 := "https://localhost:1/4"
-	cc.send(nil, url4, false, nil)
+	cc.send(sendOptions{url: url4}, nil)
 	{
 		nn := notifies.drain(1)
 		// It might seem like WantRunning should switch to true here,
@@ -870,7 +880,7 @@ func TestStateMachine(t *testing.T) {
 	notifies.expect(3)
 	cc.persist.UserProfile.LoginName = "user3"
 	cc.persist.NodeID = "node3"
-	cc.send(nil, "", true, &netmap.NetworkMap{
+	cc.send(sendOptions{loginFinished: true}, &netmap.NetworkMap{
 		SelfNode: (&tailcfg.Node{MachineAuthorized: true}).View(),
 	})
 	{
@@ -918,7 +928,7 @@ func TestStateMachine(t *testing.T) {
 	// Control server accepts our valid key from before.
 	t.Logf("\n\nLoginFinished5")
 	notifies.expect(0)
-	cc.send(nil, "", true, &netmap.NetworkMap{
+	cc.send(sendOptions{loginFinished: true}, &netmap.NetworkMap{
 		SelfNode: (&tailcfg.Node{MachineAuthorized: true}).View(),
 	})
 	{
@@ -933,7 +943,7 @@ func TestStateMachine(t *testing.T) {
 	}
 	t.Logf("\n\nExpireKey")
 	notifies.expect(1)
-	cc.send(nil, "", false, &netmap.NetworkMap{
+	cc.send(sendOptions{}, &netmap.NetworkMap{
 		Expiry:   time.Now().Add(-time.Minute),
 		SelfNode: (&tailcfg.Node{MachineAuthorized: true}).View(),
 	})
@@ -948,7 +958,7 @@ func TestStateMachine(t *testing.T) {
 
 	t.Logf("\n\nExtendKey")
 	notifies.expect(1)
-	cc.send(nil, "", false, &netmap.NetworkMap{
+	cc.send(sendOptions{}, &netmap.NetworkMap{
 		Expiry:   time.Now().Add(time.Minute),
 		SelfNode: (&tailcfg.Node{MachineAuthorized: true}).View(),
 	})
@@ -1086,7 +1096,7 @@ func TestWGEngineStatusRace(t *testing.T) {
 	wantState(ipn.NeedsLogin)
 
 	// Assert that we are logged in and authorized.
-	cc.send(nil, "", true, &netmap.NetworkMap{
+	cc.send(sendOptions{loginFinished: true}, &netmap.NetworkMap{
 		SelfNode: (&tailcfg.Node{MachineAuthorized: true}).View(),
 	})
 	wantState(ipn.Starting)
@@ -1365,7 +1375,7 @@ func TestEngineReconfigOnStateChange(t *testing.T) {
 				mustDo(t)(lb.Start(ipn.Options{}))
 				mustDo2(t)(lb.EditPrefs(connect))
 				cc().authenticated(node1)
-				cc().send(nil, "", false, &netmap.NetworkMap{
+				cc().send(sendOptions{}, &netmap.NetworkMap{
 					Expiry: time.Now().Add(-time.Minute),
 				})
 			},
@@ -1494,7 +1504,7 @@ func TestEngineReconfigOnStateChange(t *testing.T) {
 				mustDo(t)(lb.Start(ipn.Options{}))
 				mustDo2(t)(lb.EditPrefs(connect))
 				cc().authenticated(node1)
-				cc().send(nil, "", false, &netmap.NetworkMap{
+				cc().send(sendOptions{}, &netmap.NetworkMap{
 					Expiry: time.Now().Add(-time.Minute),
 				})
 			},

@@ -6123,7 +6123,7 @@ func TestLoginNotifications(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			lb.cc.(*mockControl).send(nil, loginURL, false, nil)
+			lb.cc.(*mockControl).send(sendOptions{url: loginURL}, nil)
 
 			var wg sync.WaitGroup
 			wg.Add(len(sessions))
@@ -6788,7 +6788,7 @@ func TestSrcCapPacketFilter(t *testing.T) {
 	must.Do(k.UnmarshalText([]byte("nodekey:5c8f86d5fc70d924e55f02446165a5dae8f822994ad26bcf4b08fd841f9bf261")))
 
 	controlClient := lb.cc.(*mockControl)
-	controlClient.send(nil, "", false, &netmap.NetworkMap{
+	controlClient.send(sendOptions{}, &netmap.NetworkMap{
 		SelfNode: (&tailcfg.Node{
 			Addresses: []netip.Prefix{netip.MustParsePrefix("1.1.1.1/32")},
 		}).View(),
@@ -6993,7 +6993,7 @@ func TestDisplayMessageIPNBus(t *testing.T) {
 			cc := lb.cc.(*mockControl)
 
 			// Assert that we are logged in and authorized, and also send our DisplayMessages
-			cc.send(nil, "", true, &netmap.NetworkMap{
+			cc.send(sendOptions{loginFinished: true}, &netmap.NetworkMap{
 				SelfNode:        (&tailcfg.Node{MachineAuthorized: true}).View(),
 				DisplayMessages: msgs,
 			})
