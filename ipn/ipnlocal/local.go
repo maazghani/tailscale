@@ -1123,6 +1123,7 @@ func (b *LocalBackend) Shutdown() {
 	if b.notifyCancel != nil {
 		b.notifyCancel()
 	}
+	b.appConnector.Close()
 	b.mu.Unlock()
 	b.webClientShutdown()
 
@@ -4855,6 +4856,7 @@ func (b *LocalBackend) reconfigAppConnectorLocked(nm *netmap.NetworkMap, prefs i
 	}()
 
 	if !prefs.AppConnector().Advertise {
+		b.appConnector.Close() // clean up a previous connector (safe on nil)
 		b.appConnector = nil
 		return
 	}
@@ -4874,6 +4876,8 @@ func (b *LocalBackend) reconfigAppConnectorLocked(nm *netmap.NetworkMap, prefs i
 			}
 			storeFunc = b.storeRouteInfo
 		}
+
+		b.appConnector.Close() // clean up a previous connector (safe on nil)
 		b.appConnector = appc.NewAppConnector(appc.Config{
 			Logf:            b.logf,
 			EventBus:        b.sys.Bus.Get(),
