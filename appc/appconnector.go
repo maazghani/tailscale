@@ -174,7 +174,6 @@ type Config struct {
 	EventBus *eventbus.Bus
 
 	// RouteAdvertiser allows the connector to update the set of advertised routes.
-	// It must be non-nil.
 	RouteAdvertiser RouteAdvertiser
 
 	// RouteInfo, if non-nil, use used as the initial set of routes for the
@@ -193,8 +192,6 @@ func NewAppConnector(c Config) *AppConnector {
 		panic("missing logger")
 	case c.EventBus == nil:
 		panic("missing event bus")
-	case c.RouteAdvertiser == nil:
-		panic("missing route advertiser")
 	}
 	ec := c.EventBus.Client("appc.AppConnector")
 
@@ -348,11 +345,13 @@ func (e *AppConnector) updateDomains(domains []string) {
 		}
 
 		if len(toRemove) != 0 {
-			e.queue.Add(func() {
-				if err := e.routeAdvertiser.UnadvertiseRoute(toRemove...); err != nil {
-					e.logf("failed to unadvertise routes on domain removal: %v: %v: %v", slicesx.MapKeys(oldDomains), toRemove, err)
-				}
-			})
+			if ra := e.routeAdvertiser; ra != nil {
+				e.queue.Add(func() {
+					if err := e.routeAdvertiser.UnadvertiseRoute(toRemove...); err != nil {
+						e.logf("failed to unadvertise routes on domain removal: %v: %v: %v", slicesx.MapKeys(oldDomains), toRemove, err)
+					}
+				})
+			}
 			e.updatePub.Publish(RouteUpdate{Unadvertise: toRemove})
 		}
 	}
@@ -396,14 +395,16 @@ nextRoute:
 		}
 	}
 
-	e.queue.Add(func() {
-		if err := e.routeAdvertiser.AdvertiseRoute(routes...); err != nil {
-			e.logf("failed to advertise routes: %v: %v", routes, err)
-		}
-		if err := e.routeAdvertiser.UnadvertiseRoute(toRemove...); err != nil {
-			e.logf("failed to unadvertise routes: %v: %v", toRemove, err)
-		}
-	})
+	if e.routeAdvertiser != nil {
+		e.queue.Add(func() {
+			if err := e.routeAdvertiser.AdvertiseRoute(routes...); err != nil {
+				e.logf("failed to advertise routes: %v: %v", routes, err)
+			}
+			if err := e.routeAdvertiser.UnadvertiseRoute(toRemove...); err != nil {
+				e.logf("failed to unadvertise routes: %v: %v", toRemove, err)
+			}
+		})
+	}
 	e.updatePub.Publish(RouteUpdate{
 		Advertise:   routes,
 		Unadvertise: toRemove,
@@ -609,9 +610,11 @@ func (e *AppConnector) isAddrKnownLocked(domain string, addr netip.Addr) bool {
 // associated with the given domain.
 func (e *AppConnector) scheduleAdvertisement(domain string, routes ...netip.Prefix) {
 	e.queue.Add(func() {
-		if err := e.routeAdvertiser.AdvertiseRoute(routes...); err != nil {
-			e.logf("failed to advertise routes for %s: %v: %v", domain, routes, err)
-			return
+		if e.routeAdvertiser != nil {
+			if err := e.routeAdvertiser.AdvertiseRoute(routes...); err != nil {
+				e.logf("failed to advertise routes for %s: %v: %v", domain, routes, err)
+				return
+			}
 		}
 		e.updatePub.Publish(RouteUpdate{Advertise: routes})
 		e.mu.Lock()
