@@ -99,6 +99,7 @@ func controlC(network, address string, c syscall.RawConn) error {
 		if UseSocketMark() {
 			sockErr = setBypassMark(fd)
 		} else {
+			fmt.Println("Kevin: binding to device")
 			sockErr = bindToDevice(fd)
 		}
 	})
@@ -106,6 +107,7 @@ func controlC(network, address string, c syscall.RawConn) error {
 		return fmt.Errorf("RawConn.Control on %T: %w", c, err)
 	}
 	if sockErr != nil && ignoreErrors() {
+		fmt.Println("Kevin: ignoring setsockopt error:", sockErr)
 		// TODO(bradfitz): maybe log once? probably too spammy for e.g. CLI tools like tailscale netcheck.
 		return nil
 	}
@@ -128,6 +130,7 @@ func bindToDevice(fd uintptr) error {
 		// a default route anyway, it doesn't matter.
 		ifc = "lo"
 	}
+	fmt.Println("Kevin: binding to interface", ifc)
 	if err := unix.SetsockoptString(int(fd), unix.SOL_SOCKET, unix.SO_BINDTODEVICE, ifc); err != nil {
 		return fmt.Errorf("setting SO_BINDTODEVICE: %w", err)
 	}
