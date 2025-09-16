@@ -92,6 +92,7 @@ func controlC(network, address string, c syscall.RawConn) error {
 		// Don't bind to an interface for localhost connections.
 		return nil
 	}
+	fmt.Println("Kevin: Linux controlC called for", network, address)
 
 	var sockErr error
 	err := c.Control(func(fd uintptr) {
