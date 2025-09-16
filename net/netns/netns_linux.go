@@ -60,6 +60,7 @@ var forceBindToDevice = envknob.RegisterBool("TS_FORCE_LINUX_BIND_TO_DEVICE")
 // If it doesn't, we have to use SO_BINDTODEVICE on our sockets instead.
 func UseSocketMark() bool {
 	if forceBindToDevice() {
+		fmt.Println("netns: forcing TS_FORCE_LINUX_BIND_TO_DEVICE=true; using SO_BINDTODEVICE")
 		return false
 	}
 	socketMarkWorksOnce.Do(func() {
