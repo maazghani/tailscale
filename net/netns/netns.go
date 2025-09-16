@@ -15,6 +15,7 @@ package netns
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"net/netip"
 	"sync/atomic"
@@ -71,6 +72,7 @@ func Listener(logf logger.Logf, netMon *netmon.Monitor) *net.ListenConfig {
 // namespace that doesn't route back into Tailscale. It also handles
 // using a SOCKS if configured in the environment with ALL_PROXY.
 func NewDialer(logf logger.Logf, netMon *netmon.Monitor) Dialer {
+	fmt.Println("Kevin: NewDialer called")
 	if netMon == nil {
 		panic("netns.NewDialer called with nil netMon")
 	}
