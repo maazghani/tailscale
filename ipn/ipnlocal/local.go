@@ -651,10 +651,10 @@ func (b *LocalBackend) consumeEventbusTopics(ec *eventbus.Client) func(*eventbus
 				// Whether or not routes should be stored can change over time.
 				shouldStoreRoutes := b.ControlKnobs().AppCStoreRoutes.Load()
 				if shouldStoreRoutes {
-					// TODO(creachdadair, 2025-09-13): This is a pointer for historical
-					// reasons, which should go away along with the callback.
-					if err := b.storeRouteInfo(&ri); err != nil {
-						b.logf("appc: failed to store route info: %v", err)
+					if shouldStoreRoutes {
+						if err := b.storeRouteInfo(ri); err != nil {
+							b.logf("appc: failed to store route info: %v", err)
+						}
 					}
 				}
 			}
@@ -7227,7 +7227,7 @@ func namespaceKeyForCurrentProfile(pm *profileManager, key ipn.StateKey) ipn.Sta
 
 const routeInfoStateStoreKey ipn.StateKey = "_routeInfo"
 
-func (b *LocalBackend) storeRouteInfo(ri *appc.RouteInfo) error {
+func (b *LocalBackend) storeRouteInfo(ri appc.RouteInfo) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.pm.CurrentProfile().ID() == "" {
