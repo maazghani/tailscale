@@ -470,6 +470,7 @@ func TestUpdateRouteRouteRemoval(t *testing.T) {
 	ctx := t.Context()
 	bus := eventbustest.NewBus(t)
 	for _, shouldStore := range []bool{false, true} {
+		w := eventbustest.NewWatcher(t, bus)
 		rc := &appctest.RouteCollector{}
 
 		assertRoutes := func(prefix string, routes, removedRoutes []netip.Prefix) {
@@ -511,6 +512,13 @@ func TestUpdateRouteRouteRemoval(t *testing.T) {
 			wantRemovedRoutes = prefixes("1.2.3.2/32")
 		}
 		assertRoutes("removal", wantRoutes, wantRemovedRoutes)
+
+		if err := eventbustest.Expect(w,
+			eqUpdate(RouteUpdate{Advertise: prefixes("1.2.3.1/32", "1.2.3.2/32")}), // no duplicates here
+			eventbustest.Type[RouteInfo](),
+		); err != nil {
+			t.Error(err)
+		}
 	}
 }
 
@@ -575,6 +583,7 @@ func TestUpdateDomainRouteRemoval(t *testing.T) {
 func TestUpdateWildcardRouteRemoval(t *testing.T) {
 	ctx := t.Context()
 	bus := eventbustest.NewBus(t)
+	eventbustest.LogAllEvents(t, bus)
 	for _, shouldStore := range []bool{false, true} {
 		rc := &appctest.RouteCollector{}
 
