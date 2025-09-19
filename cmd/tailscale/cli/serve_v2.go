@@ -650,16 +650,17 @@ func (e *serveEnv) setServe(sc *ipn.ServeConfig, dnsName string, srvType serveTy
 }
 
 var (
-	msgFunnelAvailable        = "Available on the internet:"
-	msgServeAvailable         = "Available within your tailnet:"
-	msgServiceWaitingApproval = "This machine is configured as a service proxy for %s, but approval from an admin is required. Once approved, it will be available in your Tailnet as:"
-	msgRunningInBackground    = "%s started and running in the background."
-	msgRunningTunService      = "IPv4 and IPv6 traffic to %s is being routed to your operating system."
-	msgDisableProxy           = "To disable the proxy, run: tailscale %s --%s=%d off"
-	msgDisableServiceProxy    = "To disable the proxy, run: tailscale serve --service=%s --%s=%d off"
-	msgDisableServiceTun      = "To disable the service in TUN mode, run: tailscale serve --service=%s --tun off"
-	msgDisableService         = "To remove config for the service, run: tailscale serve clear %s"
-	msgToExit                 = "Press Ctrl+C to exit."
+	msgFunnelAvailable             = "Available on the internet:"
+	msgServeAvailable              = "Available within your tailnet:"
+	msgServiceWaitingApproval      = "This machine is configured as a service proxy for %s, but approval from an admin is required. Once approved, it will be available in your Tailnet as:"
+	msgRunningInBackground         = "%s started and running in the background."
+	msgRunningTunService           = "IPv4 and IPv6 traffic to %s is being routed to your operating system."
+	msgDisableProxy                = "To disable the proxy, run: tailscale %s --%s=%d off"
+	msgDisableServiceProxy         = "To disable the proxy, run: tailscale serve --service=%s --%s=%d off"
+	msgDisableServiceTun           = "To disable the service in TUN mode, run: tailscale serve --service=%s --tun off"
+	msgDisableService              = "To remove config for the service, run: tailscale serve clear %s"
+	msgWarnRemoteDestCompatibility = "Warning: Your environment doesn't support connecting to remote destinations from non-default route, see (kb placeholder) for detail."
+	msgToExit                      = "Press Ctrl+C to exit."
 )
 
 // messageForPort returns a message for the given port based on the
@@ -735,7 +736,7 @@ func (e *serveEnv) messageForPort(sc *ipn.ServeConfig, st *ipnstate.Status, dnsN
 		webConfig = sc.Web[hp]
 		tcpHandler = sc.TCP[srvPort]
 	}
-
+	var hasRemote bool
 	if webConfig != nil {
 		mounts := slicesx.MapKeys(webConfig.Handlers)
 		sort.Slice(mounts, func(i, j int) bool {
@@ -745,6 +746,9 @@ func (e *serveEnv) messageForPort(sc *ipn.ServeConfig, st *ipnstate.Status, dnsN
 			t, d := srvTypeAndDesc(webConfig.Handlers[m])
 			output.WriteString(fmt.Sprintf("%s://%s%s%s\n", scheme, host, portPart, m))
 			output.WriteString(fmt.Sprintf("%s %-5s %s\n\n", "|--", t, d))
+			if t == "proxy" && isRemote(d) {
+				hasRemote = true
+			}
 		}
 	} else if tcpHandler != nil {
 
@@ -759,6 +763,9 @@ func (e *serveEnv) messageForPort(sc *ipn.ServeConfig, st *ipnstate.Status, dnsN
 			output.WriteString(fmt.Sprintf("|-- tcp://%s\n", ipp))
 		}
 		output.WriteString(fmt.Sprintf("|--> tcp://%s\n\n", tcpHandler.TCPForward))
+		if isRemote(tcpHandler.TCPForward) {
+			hasRemote = true
+		}
 	}
 
 	if !forService && !e.bg.Value {
@@ -772,6 +779,12 @@ func (e *serveEnv) messageForPort(sc *ipn.ServeConfig, st *ipnstate.Status, dnsN
 	output.WriteString(fmt.Sprintf(msgRunningInBackground, subCmdUpper))
 	output.WriteString("\n")
 	if forService {
+		if hasRemote && shouldWarnRemoteDestCompatibility() {
+			// We need to warn user with particular setup that they will have trouble serving
+			// remote destinations.
+			output.WriteString(msgWarnRemoteDestCompatibility)
+			output.WriteString("\n")
+		}
 		output.WriteString(fmt.Sprintf(msgDisableServiceProxy, dnsName, srvType.String(), srvPort))
 		output.WriteString("\n")
 		output.WriteString(fmt.Sprintf(msgDisableService, dnsName))
@@ -782,8 +795,35 @@ func (e *serveEnv) messageForPort(sc *ipn.ServeConfig, st *ipnstate.Status, dnsN
 	return output.String()
 }
 
+// isRemote reports whether the given destination from serve config
+// is a remote destination.
+func isRemote(dest string) bool {
+	u, _ := url.ParseRequestURI(dest)
+	if u.Hostname() != "localhost" && u.Hostname() != "127.0.0.1" {
+		return true
+	}
+	return false
+}
+
+// shouldWarnProxyCompatibility reports whether we should warn the user
+// that their current OS/environment may not be compatible with
+// service's proxy destination.
+func shouldWarnRemoteDestCompatibility() bool {
+	// Check if running as Mac extension and warn
+	if version.IsMacAppStore() || version.IsMacSysExt() {
+		return true
+	}
+
+	// TODO(kevinliang10): check for linux, if it's running with TS_FORCE_LINUX_BIND_TO_DEVICE=true
+	// and tailscale bypass mark is not working. If any of these conditions are true, and the dest is
+	// a remote destination, return true.
+
+	return false
+}
+
 func (e *serveEnv) applyWebServe(sc *ipn.ServeConfig, dnsName string, srvPort uint16, useTLS bool, mount, target string, mds string) error {
 	h := new(ipn.HTTPHandler)
+	svcName := tailcfg.AsServiceName(dnsName)
 	switch {
 	case strings.HasPrefix(target, "text:"):
 		text := strings.TrimPrefix(target, "text:")
@@ -811,7 +851,7 @@ func (e *serveEnv) applyWebServe(sc *ipn.ServeConfig, dnsName string, srvPort ui
 		}
 		h.Path = target
 	default:
-		t, err := ipn.ExpandProxyTargetValue(target, []string{"http", "https", "https+insecure"}, "http")
+		t, err := ipn.ExpandProxyTargetValue(target, []string{"http", "https", "https+insecure"}, "http", svcName)
 		if err != nil {
 			return err
 		}
@@ -819,7 +859,6 @@ func (e *serveEnv) applyWebServe(sc *ipn.ServeConfig, dnsName string, srvPort ui
 	}
 
 	// TODO: validation needs to check nested foreground configs
-	svcName := tailcfg.AsServiceName(dnsName)
 	if sc.IsTCPForwardingOnPort(srvPort, svcName) {
 		return errors.New("cannot serve web; already serving TCP")
 	}
@@ -840,7 +879,9 @@ func (e *serveEnv) applyTCPServe(sc *ipn.ServeConfig, dnsName string, srcType se
 		return fmt.Errorf("invalid TCP target %q", target)
 	}
 
-	targetURL, err := ipn.ExpandProxyTargetValue(target, []string{"tcp"}, "tcp")
+	svcName := tailcfg.AsServiceName(dnsName)
+
+	targetURL, err := ipn.ExpandProxyTargetValue(target, []string{"tcp"}, "tcp", svcName)
 	if err != nil {
 		return fmt.Errorf("unable to expand target: %v", err)
 	}
@@ -851,7 +892,6 @@ func (e *serveEnv) applyTCPServe(sc *ipn.ServeConfig, dnsName string, srcType se
 	}
 
 	// TODO: needs to account for multiple configs from foreground mode
-	svcName := tailcfg.AsServiceName(dnsName)
 	if sc.IsServingWeb(srcPort, svcName) {
 		return fmt.Errorf("cannot serve TCP; already serving web on %d for %s", srcPort, dnsName)
 	}

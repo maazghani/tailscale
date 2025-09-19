@@ -659,8 +659,9 @@ func CheckFunnelPort(wantedPort uint16, node *ipnstate.PeerStatus) error {
 //   - https://localhost:3000
 //   - https-insecure://localhost:3000
 //   - https-insecure://localhost:3000/foo
-func ExpandProxyTargetValue(target string, supportedSchemes []string, defaultScheme string) (string, error) {
+func ExpandProxyTargetValue(target string, supportedSchemes []string, defaultScheme string, svcName tailcfg.ServiceName) (string, error) {
 	const host = "127.0.0.1"
+	forService := svcName.Validate() == nil
 
 	// support target being a port number
 	if port, err := strconv.ParseUint(target, 10, 16); err == nil {
@@ -687,12 +688,15 @@ func ExpandProxyTargetValue(target string, supportedSchemes []string, defaultSch
 	switch u.Hostname() {
 	case "localhost", "127.0.0.1":
 	default:
-		return "", errors.New("only localhost or 127.0.0.1 proxies are currently supported")
+		// Allow remote destinations only for services.
+		if !forService {
+			return "", errors.New("only localhost or 127.0.0.1 proxies are currently supported")
+		}
 	}
 
 	// validate the port
 	port, err := strconv.ParseUint(u.Port(), 10, 16)
-	if err != nil || port == 0 {
+	if err != nil || (port == 0 && !forService) {
 		return "", fmt.Errorf("invalid port %q", u.Port())
 	}
 
