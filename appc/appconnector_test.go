@@ -18,6 +18,7 @@ import (
 	"golang.org/x/net/dns/dnsmessage"
 	"tailscale.com/appc/appctest"
 	"tailscale.com/tstest"
+	"tailscale.com/types/appctype"
 	"tailscale.com/util/clientmetric"
 	"tailscale.com/util/eventbus/eventbustest"
 	"tailscale.com/util/mak"
@@ -112,15 +113,15 @@ func TestUpdateRoutes(t *testing.T) {
 		}
 
 		if err := eventbustest.Expect(w,
-			eqUpdate(RouteUpdate{Advertise: prefixes("192.0.2.1/32")}),
-			eventbustest.Type[RouteInfo](),
-			eqUpdate(RouteUpdate{Advertise: prefixes("192.0.0.1/32")}),
-			eventbustest.Type[RouteInfo](),
-			eqUpdate(RouteUpdate{
+			eqUpdate(appctype.RouteUpdate{Advertise: prefixes("192.0.2.1/32")}),
+			eventbustest.Type[appctype.RouteInfo](),
+			eqUpdate(appctype.RouteUpdate{Advertise: prefixes("192.0.0.1/32")}),
+			eventbustest.Type[appctype.RouteInfo](),
+			eqUpdate(appctype.RouteUpdate{
 				Advertise:   prefixes("192.0.0.1/32", "192.0.2.0/24"),
 				Unadvertise: prefixes("192.0.2.1/32"),
 			}),
-			eventbustest.Type[RouteInfo](),
+			eventbustest.Type[appctype.RouteInfo](),
 		); err != nil {
 			t.Error(err)
 		}
@@ -152,11 +153,11 @@ func TestUpdateRoutesUnadvertisesContainedRoutes(t *testing.T) {
 		}
 
 		if err := eventbustest.ExpectExactly(w,
-			eqUpdate(RouteUpdate{
+			eqUpdate(appctype.RouteUpdate{
 				Advertise:   prefixes("192.0.2.0/24"),
 				Unadvertise: prefixes("192.0.2.1/32"),
 			}),
-			eventbustest.Type[RouteInfo](),
+			eventbustest.Type[appctype.RouteInfo](),
 		); err != nil {
 			t.Error(err)
 		}
@@ -190,8 +191,8 @@ func TestDomainRoutes(t *testing.T) {
 		}
 
 		if err := eventbustest.ExpectExactly(w,
-			eqUpdate(RouteUpdate{Advertise: prefixes("192.0.0.8/32")}),
-			eventbustest.Type[RouteInfo](),
+			eqUpdate(appctype.RouteUpdate{Advertise: prefixes("192.0.0.8/32")}),
+			eventbustest.Type[appctype.RouteInfo](),
 		); err != nil {
 			t.Error(err)
 		}
@@ -289,16 +290,16 @@ func TestObserveDNSResponse(t *testing.T) {
 		}
 
 		if err := eventbustest.ExpectExactly(w,
-			eqUpdate(RouteUpdate{Advertise: prefixes("192.0.0.8/32")}), // from initial DNS response, via example.com
-			eventbustest.Type[RouteInfo](),
-			eqUpdate(RouteUpdate{Advertise: prefixes("192.0.0.9/32")}), // from CNAME response
-			eventbustest.Type[RouteInfo](),
-			eqUpdate(RouteUpdate{Advertise: prefixes("192.0.0.10/32")}), // from CNAME response, mid-chain
-			eventbustest.Type[RouteInfo](),
-			eqUpdate(RouteUpdate{Advertise: prefixes("2001:db8::1/128")}), // v6 DNS response
-			eventbustest.Type[RouteInfo](),
-			eqUpdate(RouteUpdate{Advertise: prefixes("192.0.2.0/24")}), // additional prefix
-			eventbustest.Type[RouteInfo](),
+			eqUpdate(appctype.RouteUpdate{Advertise: prefixes("192.0.0.8/32")}), // from initial DNS response, via example.com
+			eventbustest.Type[appctype.RouteInfo](),
+			eqUpdate(appctype.RouteUpdate{Advertise: prefixes("192.0.0.9/32")}), // from CNAME response
+			eventbustest.Type[appctype.RouteInfo](),
+			eqUpdate(appctype.RouteUpdate{Advertise: prefixes("192.0.0.10/32")}), // from CNAME response, mid-chain
+			eventbustest.Type[appctype.RouteInfo](),
+			eqUpdate(appctype.RouteUpdate{Advertise: prefixes("2001:db8::1/128")}), // v6 DNS response
+			eventbustest.Type[appctype.RouteInfo](),
+			eqUpdate(appctype.RouteUpdate{Advertise: prefixes("192.0.2.0/24")}), // additional prefix
+			eventbustest.Type[appctype.RouteInfo](),
 			// N.B. no update for 192.0.2.1 as it is already covered
 		); err != nil {
 			t.Error(err)
@@ -347,8 +348,8 @@ func TestWildcardDomains(t *testing.T) {
 		}
 
 		if err := eventbustest.ExpectExactly(w,
-			eqUpdate(RouteUpdate{Advertise: prefixes("192.0.0.8/32")}),
-			eventbustest.Type[RouteInfo](),
+			eqUpdate(appctype.RouteUpdate{Advertise: prefixes("192.0.0.8/32")}),
+			eventbustest.Type[appctype.RouteInfo](),
 		); err != nil {
 			t.Error(err)
 		}
@@ -514,8 +515,8 @@ func TestUpdateRouteRouteRemoval(t *testing.T) {
 		assertRoutes("removal", wantRoutes, wantRemovedRoutes)
 
 		if err := eventbustest.Expect(w,
-			eqUpdate(RouteUpdate{Advertise: prefixes("1.2.3.1/32", "1.2.3.2/32")}), // no duplicates here
-			eventbustest.Type[RouteInfo](),
+			eqUpdate(appctype.RouteUpdate{Advertise: prefixes("1.2.3.1/32", "1.2.3.2/32")}), // no duplicates here
+			eventbustest.Type[appctype.RouteInfo](),
 		); err != nil {
 			t.Error(err)
 		}
@@ -581,13 +582,15 @@ func TestUpdateDomainRouteRemoval(t *testing.T) {
 
 		wantEvents := []any{
 			// Each DNS record observed triggers an update.
-			eqUpdate(RouteUpdate{Advertise: prefixes("1.2.3.1/32")}),
-			eqUpdate(RouteUpdate{Advertise: prefixes("1.2.3.2/32")}),
-			eqUpdate(RouteUpdate{Advertise: prefixes("1.2.3.3/32")}),
-			eqUpdate(RouteUpdate{Advertise: prefixes("1.2.3.4/32")}),
+			eqUpdate(appctype.RouteUpdate{Advertise: prefixes("1.2.3.1/32")}),
+			eqUpdate(appctype.RouteUpdate{Advertise: prefixes("1.2.3.2/32")}),
+			eqUpdate(appctype.RouteUpdate{Advertise: prefixes("1.2.3.3/32")}),
+			eqUpdate(appctype.RouteUpdate{Advertise: prefixes("1.2.3.4/32")}),
 		}
 		if shouldStore {
-			wantEvents = append(wantEvents, eqUpdate(RouteUpdate{Unadvertise: prefixes("1.2.3.3/32", "1.2.3.4/32")}))
+			wantEvents = append(wantEvents, eqUpdate(appctype.RouteUpdate{
+				Unadvertise: prefixes("1.2.3.3/32", "1.2.3.4/32"),
+			}))
 		}
 		if err := eventbustest.Expect(w, wantEvents...); err != nil {
 			t.Error(err)
@@ -654,13 +657,15 @@ func TestUpdateWildcardRouteRemoval(t *testing.T) {
 
 		wantEvents := []any{
 			// Each DNS record observed triggers an update.
-			eqUpdate(RouteUpdate{Advertise: prefixes("1.2.3.1/32")}),
-			eqUpdate(RouteUpdate{Advertise: prefixes("1.2.3.2/32")}),
-			eqUpdate(RouteUpdate{Advertise: prefixes("1.2.3.3/32")}),
-			eqUpdate(RouteUpdate{Advertise: prefixes("1.2.3.4/32")}),
+			eqUpdate(appctype.RouteUpdate{Advertise: prefixes("1.2.3.1/32")}),
+			eqUpdate(appctype.RouteUpdate{Advertise: prefixes("1.2.3.2/32")}),
+			eqUpdate(appctype.RouteUpdate{Advertise: prefixes("1.2.3.3/32")}),
+			eqUpdate(appctype.RouteUpdate{Advertise: prefixes("1.2.3.4/32")}),
 		}
 		if shouldStore {
-			wantEvents = append(wantEvents, eqUpdate(RouteUpdate{Unadvertise: prefixes("1.2.3.3/32", "1.2.3.4/32")}))
+			wantEvents = append(wantEvents, eqUpdate(appctype.RouteUpdate{
+				Unadvertise: prefixes("1.2.3.3/32", "1.2.3.4/32"),
+			}))
 		}
 		if err := eventbustest.Expect(w, wantEvents...); err != nil {
 			t.Error(err)
@@ -828,10 +833,10 @@ func TestUpdateRoutesDeadlock(t *testing.T) {
 	}
 
 	if err := eventbustest.ExpectExactly(w,
-		eqUpdate(RouteUpdate{Advertise: prefixes("127.0.0.1/32", "127.0.0.2/32")}),
-		eventbustest.Type[RouteInfo](),
-		eqUpdate(RouteUpdate{Advertise: prefixes("127.0.0.1/32"), Unadvertise: prefixes("127.0.0.2/32")}),
-		eventbustest.Type[RouteInfo](),
+		eqUpdate(appctype.RouteUpdate{Advertise: prefixes("127.0.0.1/32", "127.0.0.2/32")}),
+		eventbustest.Type[appctype.RouteInfo](),
+		eqUpdate(appctype.RouteUpdate{Advertise: prefixes("127.0.0.1/32"), Unadvertise: prefixes("127.0.0.2/32")}),
+		eventbustest.Type[appctype.RouteInfo](),
 	); err != nil {
 		t.Error(err)
 	}
@@ -842,7 +847,7 @@ type textUpdate struct {
 	Unadvertise []string
 }
 
-func routeUpdateToText(u RouteUpdate) textUpdate {
+func routeUpdateToText(u appctype.RouteUpdate) textUpdate {
 	var out textUpdate
 	for _, p := range u.Advertise {
 		out.Advertise = append(out.Advertise, p.String())
@@ -853,10 +858,10 @@ func routeUpdateToText(u RouteUpdate) textUpdate {
 	return out
 }
 
-// eqUpdate generates an eventbus test filter that matches a RouteUpdate
+// eqUpdate generates an eventbus test filter that matches a appctype.RouteUpdate
 // message equal to want, or reports an error giving a human-readable diff.
-func eqUpdate(want RouteUpdate) func(RouteUpdate) error {
-	return func(got RouteUpdate) error {
+func eqUpdate(want appctype.RouteUpdate) func(appctype.RouteUpdate) error {
+	return func(got appctype.RouteUpdate) error {
 		if diff := cmp.Diff(routeUpdateToText(got), routeUpdateToText(want),
 			cmpopts.SortSlices(stdcmp.Less[string]),
 		); diff != "" {
