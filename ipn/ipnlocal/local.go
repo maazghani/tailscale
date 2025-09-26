@@ -7227,7 +7227,7 @@ func namespaceKeyForCurrentProfile(pm *profileManager, key ipn.StateKey) ipn.Sta
 
 const routeInfoStateStoreKey ipn.StateKey = "_routeInfo"
 
-func (b *LocalBackend) storeRouteInfo(ri appc.RouteInfo) error {
+func (b *LocalBackend) storeRouteInfo(ri appctype.RouteInfo) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.pm.CurrentProfile().ID() == "" {
@@ -7241,13 +7241,13 @@ func (b *LocalBackend) storeRouteInfo(ri appc.RouteInfo) error {
 	return b.pm.WriteState(key, bs)
 }
 
-func (b *LocalBackend) readRouteInfoLocked() (*appc.RouteInfo, error) {
+func (b *LocalBackend) readRouteInfoLocked() (*appctype.RouteInfo, error) {
 	if b.pm.CurrentProfile().ID() == "" {
-		return &appc.RouteInfo{}, nil
+		return &appctype.RouteInfo{}, nil
 	}
 	key := namespaceKeyForCurrentProfile(b.pm, routeInfoStateStoreKey)
 	bs, err := b.pm.Store().ReadState(key)
-	ri := &appc.RouteInfo{}
+	ri := &appctype.RouteInfo{}
 	if err != nil {
 		return nil, err
 	}

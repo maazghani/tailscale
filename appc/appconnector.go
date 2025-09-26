@@ -118,10 +118,6 @@ func metricStoreRoutes(rate, nRoutes int64) {
 	recordMetric(nRoutes, metricStoreRoutesNBuckets, metricStoreRoutesN)
 }
 
-// TODO(creachadair): Update usage and remove.
-type RouteInfo = appctype.RouteInfo
-type RouteUpdate = appctype.RouteUpdate
-
 // AppConnector is an implementation of an AppConnector that performs
 // its function as a subsystem inside of a tailscale node. At the control plane
 // side App Connector routing is configured in terms of domains rather than IP
@@ -137,8 +133,8 @@ type AppConnector struct {
 	eventBus        *eventbus.Bus
 	routeAdvertiser RouteAdvertiser
 	pubClient       *eventbus.Client
-	updatePub       *eventbus.Publisher[RouteUpdate]
-	storePub        *eventbus.Publisher[RouteInfo]
+	updatePub       *eventbus.Publisher[appctype.RouteUpdate]
+	storePub        *eventbus.Publisher[appctype.RouteInfo]
 
 	// hasStoredRoutes records whether the connector was initialized with
 	// persisted route information.
@@ -179,7 +175,7 @@ type Config struct {
 
 	// RouteInfo, if non-nil, use used as the initial set of routes for the
 	// connector.  If nil, the connector starts empty.
-	RouteInfo *RouteInfo
+	RouteInfo *appctype.RouteInfo
 
 	// HasStoredRoutes indicates that the connector should assume stored routes.
 	HasStoredRoutes bool
@@ -199,8 +195,8 @@ func NewAppConnector(c Config) *AppConnector {
 		logf:            logger.WithPrefix(c.Logf, "appc: "),
 		eventBus:        c.EventBus,
 		pubClient:       ec,
-		updatePub:       eventbus.Publish[RouteUpdate](ec),
-		storePub:        eventbus.Publish[RouteInfo](ec),
+		updatePub:       eventbus.Publish[appctype.RouteUpdate](ec),
+		storePub:        eventbus.Publish[appctype.RouteInfo](ec),
 		routeAdvertiser: c.RouteAdvertiser,
 		hasStoredRoutes: c.HasStoredRoutes,
 	}
@@ -234,7 +230,7 @@ func (e *AppConnector) storeRoutesLocked() {
 		e.writeRateMinute.update(numRoutes)
 		e.writeRateDay.update(numRoutes)
 
-		e.storePub.Publish(RouteInfo{
+		e.storePub.Publish(appctype.RouteInfo{
 			// Clone here, as the subscriber will handle these outside our lock.
 			Control:   slices.Clone(e.controlRoutes),
 			Domains:   maps.Clone(e.domains),
@@ -341,7 +337,7 @@ func (e *AppConnector) updateDomains(domains []string) {
 					}
 				})
 			}
-			e.updatePub.Publish(RouteUpdate{Unadvertise: toRemove})
+			e.updatePub.Publish(appctype.RouteUpdate{Unadvertise: toRemove})
 		}
 	}
 
@@ -393,7 +389,7 @@ nextRoute:
 			}
 		})
 	}
-	e.updatePub.Publish(RouteUpdate{
+	e.updatePub.Publish(appctype.RouteUpdate{
 		Advertise:   routes,
 		Unadvertise: toRemove,
 	})
@@ -602,7 +598,7 @@ func (e *AppConnector) scheduleAdvertisement(domain string, routes ...netip.Pref
 				return
 			}
 		}
-		e.updatePub.Publish(RouteUpdate{Advertise: routes})
+		e.updatePub.Publish(appctype.RouteUpdate{Advertise: routes})
 		e.mu.Lock()
 		defer e.mu.Unlock()
 
