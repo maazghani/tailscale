@@ -1,5 +1,7 @@
 #!/bin/bash
 
+git submodule update --init --recursive
+
 cd src
 
 go build ./cmd/tailscale
